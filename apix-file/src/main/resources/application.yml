@@ -1,0 +1,26 @@
+server:
+  port: 5094
+
+spring:
+  application:
+    name: apix-file
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/apix_database?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: apix
+    password: apixapix
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  redis:
+    host: localhost
+    port: 6379
+    database: 0
+
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+apix:
+  file:
+    store-dir: ./data/files

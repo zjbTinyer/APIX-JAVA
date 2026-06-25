@@ -1,0 +1,29 @@
+server:
+  port: 5091
+
+spring:
+  application:
+    name: apix-agent
+
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.redisson.spring.starter.RedissonAutoConfiguration
+      - org.redisson.spring.starter.RedissonAutoConfigurationV2
+
+apix:
+  agent:
+    sandbox-image: agent-sandbox:latest
+    base-dir: ../apix_running_time/
+    graph-cache-ttl: 600
+    generation-ttl: 600
+    container-ttl: 6000
+    max-retry: 8
+    tools-max-output-length: 32000
+
+  services:
+    memory: http://localhost:5093
+    file: http://localhost:5094
+    task: http://localhost:5090

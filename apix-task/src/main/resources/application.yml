@@ -1,0 +1,6 @@
+server:
+  port: 5090
+
+spring:
+  application:
+    name: apix-task
