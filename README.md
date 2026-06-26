@@ -146,7 +146,7 @@ llm_call ──────────── LLM 调用（流式 / 非流式）
 | **后端语言** | Java | **17+** |
 | **主框架** | Spring Boot | **3.3.5** |
 | **微服务** | Spring Cloud | 2023.0.3 |
-| **ORM** | MyBatis-Plus | 3.5.9 |
+| **ORM** | MyBatis-Plus | 3.5.13 (spring-boot3-starter) |
 | **数据库** | MySQL | 8.0+ |
 | **缓存** | Redis + Redisson | 3.37.0 |
 | **JWT** | jjwt | 0.12.6 |

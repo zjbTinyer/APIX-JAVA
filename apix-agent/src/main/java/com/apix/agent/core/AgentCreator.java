@@ -7,6 +7,7 @@ import com.apix.common.model.AgentConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -28,6 +29,7 @@ public class AgentCreator {
     private static final Logger log = LoggerFactory.getLogger(AgentCreator.class);
 
     @Autowired
+    @Lazy
     private ToolRegistry toolRegistry;
 
     /** 图缓存: hashKey -> GraphCacheEntry */
