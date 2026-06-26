@@ -15,18 +15,18 @@ import java.util.Map;
  * Agent 有向状态图引擎 — 对标 LangGraph 的 CompiledStateGraph。
  *
  * 节点执行顺序:
- *   START → context_prepare → context_summary → llm_call
- *                                                  │
- *                                         ┌────────┴────────┐
- *                                         ▼                 ▼
- *                                     tools (有 tool_calls)  messages_persist
- *                                         │                 │
- *                                         └──→ llm_call ←───┘
- *                                                            │
- *                                                            ▼
- *                                                           END
+ * START → context_prepare → context_summary → llm_call
+ * │
+ * ┌────────┴────────┐
+ * ▼ ▼
+ * tools (有 tool_calls) messages_persist
+ * │ │
+ * └──→ llm_call ←───┘
+ * │
+ * ▼
+ * END
  *
- *  路由逻辑: retry→llm_call, summary→context_summary, ok→messages_persist
+ * 路由逻辑: retry→llm_call, summary→context_summary, ok→messages_persist
  */
 public class AgentGraph {
 
@@ -40,6 +40,20 @@ public class AgentGraph {
     public static final String END = "__end__";
 
     private final Map<String, AgentNode> nodes = new LinkedHashMap<>();
+
+    /** 当前图配置的工具列表（用于 LLM function calling） */
+    private java.util.List<Map<String, Object>> toolList = new java.util.ArrayList<>();
+
+    /**
+     * 设置工具列表，让 LlmCallNode 在调用 LLM 时传递给模型。
+     */
+    public void setToolList(java.util.List<Map<String, Object>> toolList) {
+        this.toolList = toolList;
+    }
+
+    public java.util.List<Map<String, Object>> getToolList() {
+        return toolList;
+    }
 
     public AgentGraph() {
         registerNode(new ContextPrepareNode());
@@ -92,7 +106,7 @@ public class AgentGraph {
 
             log.debug("[AgentGraph] Step {}: node={}", ++step, currentNode);
             sendEvent(writer, state, AgentEvent.ESSENTIAL_INFO_RETURN,
-                Map.of("node", currentNode, "step", step));
+                    Map.of("node", currentNode, "step", step));
 
             String nextNode = node.execute(state);
             log.debug("[AgentGraph] Node {} → next: {}", currentNode, nextNode);
@@ -111,17 +125,19 @@ public class AgentGraph {
      * 发送 LLM_STREAM_START / LLM_CHUNK_RETURN / LLM_STREAM_END 等事件。
      */
     private void sendEvent(AgentStreamWriter writer, MainAgentState state,
-                           String eventName, Map<String, Object> extra) {
-        if (writer == null) return;
+            String eventName, Map<String, Object> extra) {
+        if (writer == null)
+            return;
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("event_name", eventName);
-        if (extra != null) data.putAll(extra);
+        if (extra != null)
+            data.putAll(extra);
 
         ApixEventEnvelopeTarget target = state.getTarget();
         if (target == null) {
             target = new ApixEventEnvelopeTarget(
-                state.getClientId(), state.getPlatform(), state.getHistoryId());
+                    state.getClientId(), state.getPlatform(), state.getHistoryId());
         }
 
         writer.sendEvent(eventName, target, data);
@@ -131,7 +147,8 @@ public class AgentGraph {
      * 发送 AI_MESSAGE_RETURN 事件（最终 AI 回复）。
      */
     private void sendAiMessageReturn(AgentStreamWriter writer, MainAgentState state) {
-        if (writer == null || state.getMessages() == null) return;
+        if (writer == null || state.getMessages() == null)
+            return;
 
         // 找到最后一条 AI 消息
         Map<String, Object> lastAiMsg = null;
@@ -142,7 +159,8 @@ public class AgentGraph {
                 break;
             }
         }
-        if (lastAiMsg == null) return;
+        if (lastAiMsg == null)
+            return;
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("event_name", AgentEvent.AI_MESSAGE_RETURN);
@@ -152,7 +170,7 @@ public class AgentGraph {
         ApixEventEnvelopeTarget target = state.getTarget();
         if (target == null) {
             target = new ApixEventEnvelopeTarget(
-                state.getClientId(), state.getPlatform(), state.getHistoryId());
+                    state.getClientId(), state.getPlatform(), state.getHistoryId());
         }
         writer.sendEvent(AgentEvent.AI_MESSAGE_RETURN, target, data);
     }

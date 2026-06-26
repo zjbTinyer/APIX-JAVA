@@ -6,12 +6,13 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Java-1.8+-blue?logo=openjdk" alt="Java">
-  <img src="https://img.shields.io/badge/Spring%20Boot-2.7.18-brightgreen?logo=springboot" alt="Spring Boot">
+  <img src="https://img.shields.io/badge/Java-17+-blue?logo=openjdk" alt="Java">
+  <img src="https://img.shields.io/badge/Spring%20Boot-3.3.5-brightgreen?logo=springboot" alt="Spring Boot">
   <img src="https://img.shields.io/badge/React-18+-61DAFB?logo=react" alt="React">
   <img src="https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql" alt="MySQL">
   <img src="https://img.shields.io/badge/Redis-7.0-DC382D?logo=redis" alt="Redis">
   <img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="License">
+  <img src="https://img.shields.io/badge/status-developing-yellow" alt="Status">
 </p>
 
 ---
@@ -142,12 +143,16 @@ llm_call ──────────── LLM 调用（流式 / 非流式）
 
 | 层级 | 技术 | 版本 |
 |------|------|------|
-| **后端语言** | Java | 1.8+ |
-| **主框架** | Spring Boot | 2.7.18 |
-| **微服务** | Spring Cloud | 2021.0.9 |
-| **ORM** | MyBatis-Plus | 3.5.7 |
+| **后端语言** | Java | **17+** |
+| **主框架** | Spring Boot | **3.3.5** |
+| **微服务** | Spring Cloud | 2023.0.3 |
+| **ORM** | MyBatis-Plus | 3.5.9 |
 | **数据库** | MySQL | 8.0+ |
-| **缓存** | Redis + Redisson | 3.34.1 |
+| **缓存** | Redis + Redisson | 3.37.0 |
+| **JWT** | jjwt | 0.12.6 |
+| **HTTP 客户端** | OkHttp | 4.12.0 |
+| **HTML 解析** | Jsoup | 1.18.3 |
+| **密码加密** | BCrypt (spring-security-crypto) | — |
 | **工具库** | Hutool, FastJSON, Lombok | — |
 | **前端框架** | React 18 + TypeScript | — |
 | **构建工具** | Vite 6 | — |
@@ -241,13 +246,26 @@ apix-java/
 
 ---
 
-## 🚀 快速启动
+## � 项目完成度
+
+| 模块 | 完成度 | 说明 |
+|------|--------|------|
+| apix-common | ✅ 90% | 公共模型、常量、异常体系 |
+| apix-agent | ✅ **88%** | Agent 图引擎、LLM 适配、20+ 工具、MCP、子 Agent 调度 |
+| apix-memory | ✅ **90%** | 对话/记忆/用户管理、JWT、BCrypt |
+| apix-file | ✅ **75%** | 文件上传下载、MySQL 持久化、RAG 端点 |
+| apix-task | ⚠️ **25%** | 基础 Controller 端点，待完整任务流引擎 |
+| apix-web | ✅ **85%** | 8 个页面、深色主题、服务监控、代码编辑器 |
+
+---
+
+## �🚀 快速启动
 
 ### 环境要求
 
 | 依赖 | 版本要求 | 用途 |
 |------|----------|------|
-| JDK | 1.8+ | 后端运行 |
+| JDK | **17+** | 后端运行 |
 | Maven | 3.6+ | 后端构建 |
 | Node.js | 18+ | 前端构建 |
 | pnpm | 8+ | 前端包管理 |
@@ -258,31 +276,28 @@ apix-java/
 ### 1️⃣ 克隆项目
 
 ```bash
-git clone https://github.com/your-org/apix-java.git
+git clone https://github.com/zjbTinyer/APIX-JAVA.git
 cd apix-java
 ```
 
 ### 2️⃣ 初始化数据库
 
-创建数据库 `apix_database`：
-
 ```sql
-CREATE DATABASE IF NOT EXISTS apix_database DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS apix_database
+  DEFAULT CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
 ```
-
-项目启动时会自动建表（如果配置了 `spring.jpa.hibernate.ddl-auto: update` 或使用了 MyBatis-Plus 的自动建表功能），或手动执行 SQL 脚本（如提供）。
 
 ### 3️⃣ 配置后端
 
-编辑各模块的 `application.yml`，修改数据库连接和 Redis 配置：
+编辑 `apix-memory/src/main/resources/application.yml`：
 
 ```yaml
-# apix-memory/src/main/resources/application.yml
 spring:
   datasource:
     url: jdbc:mysql://localhost:3306/apix_database?useSSL=false&serverTimezone=Asia/Shanghai
-    username: apix
-    password: apixapix
+    username: root          # 改为你的 MySQL 用户名
+    password: your-password # 改为你的 MySQL 密码
   redis:
     host: localhost
     port: 6379
@@ -393,48 +408,73 @@ pnpm dev
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/v1/get_models_list` | 获取模型列表 |
+| GET | `/api/v1/health` | 健康检查 |
+| POST | `/api/v1/chat` | HTTP 聊天（同步） |
+| POST | `/api/v1/get_models_list` | 获取模型列表（自动调用供应商 API） |
+| GET | `/api/v1/get_sub_agent_task_list` | 子 Agent 任务列表 |
+| GET | `/api/v1/clear_finished_tasks` | 清除已完成任务 |
 | WS | `/ws/{platform}/{clientId}` | Agent 对话 WebSocket |
 
 ### 记忆服务 (`:5093`)
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/auth/login` | 用户登录 |
-| POST | `/auth/register` | 用户注册 |
 | GET | `/health` | 健康检查 |
-| GET | `/memory/memory/conversations` | 获取会话列表 |
-| POST | `/memory/memory/messages` | 获取消息列表 |
-| POST | `/memory/memory/save` | 保存记忆 |
+| POST | `/auth/login` | 用户登录 (AES 解密) |
+| POST | `/auth/register` | 用户注册 |
+| POST | `/auth/ensure_user` | 验证用户存在 |
+| POST | `/memory/memory/append_message` | 追加消息 |
+| POST | `/memory/memory/get_messages` | 获取消息列表 |
+| POST | `/memory/conversation/get_list` | 会话列表 |
+| POST | `/memory/conversation/create` | 创建会话 |
 | GET | `/user/info` | 获取用户信息 |
 
 ### 文件服务 (`:5094`)
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/file/file/upload` | 文件上传 |
-| GET | `/file/file/download/{fileId}` | 文件下载 |
-| GET | `/file/file/list` | 文件列表 |
+| GET | `/file/health` | 健康检查 |
+| POST | `/file/file/insert_file` | 文件上传（多文件） |
+| POST | `/file/file/get_recent_files` | 最近文件列表 |
+| POST | `/file/file/update_file` | 更新文件（软删除） |
+| POST | `/rag/retrieval/search` | 知识库搜索 |
+| GET | `/rag/documents` | 文档列表 |
+| DELETE | `/rag/documents/{docId}` | 删除文档 |
+
+### 任务服务 (`:5090`)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/health` | 健康检查 |
+| GET | `/api/v1/tasks` | 任务列表 |
+| GET | `/api/v1/tasks/stats` | 任务统计 |
+| POST | `/api/v1/tasks/{taskId}/stop` | 终止任务 |
 
 ---
 
 ## 🗺️ 开发计划
 
-- [x] **v1.0 基础版**
+- [x] **v1.0 基础版** ✅
   - [x] Agent 图引擎（上下文准备 → LLM 调用 → 工具执行 → 持久化）
-  - [x] 多 LLM 供应商支持
-  - [x] 文件操作工具集
-  - [x] WebSocket 流式通信
-  - [x] 对话记忆管理
-  - [x] 用户认证系统
+  - [x] 多 LLM 供应商支持 + 模型列表自动获取
+  - [x] Function Calling 工具系统（20+ 工具 + 权限控制）
+  - [x] MCP 客户端（SSE / Stdio / HTTP / WebSocket）
+  - [x] 子 Agent 后台调度
+  - [x] WebSocket 流式通信（打字机效果）
+  - [x] 对话记忆管理（短期 + 长期）
+  - [x] 用户认证系统（JWT + BCrypt）
+  - [x] JDK 17 + Spring Boot 3.3.5 升级
+  - [x] 文件管理（上传/下载/SHA256/MySQL持久化）
+  - [x] 前端深色主题 + 服务监控 + 代码编辑器
 - [ ] **v1.1 增强版**
-  - [ ] RAG 知识库（向量检索）
+  - [ ] RAG 知识库（向量检索，集成 Chroma/FAISS）
   - [ ] Docker 沙箱完善
   - [ ] 任务流引擎（apix-task 模块）
   - [ ] MCP 工具扩展市场
+  - [ ] 单元测试 + 集成测试覆盖
 - [ ] **v2.0 协作版**
   - [ ] 多 Agent 团队协作
-  - [ ] 可视化工作流编排
+  - [ ] 可视化工作流编排（TaskFlowPage）
   - [ ] 插件系统
   - [ ] 企业级权限管理
 

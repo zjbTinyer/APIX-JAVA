@@ -1,8 +1,11 @@
 package com.apix.file.controller;
 
 import com.apix.common.model.R;
+import com.apix.file.entity.FileStore;
+import com.apix.file.service.FileStoreService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -14,7 +17,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
-import java.time.LocalDateTime;
 import java.util.*;
 
 /**
@@ -26,13 +28,16 @@ public class FileController {
 
     private static final Logger log = LoggerFactory.getLogger(FileController.class);
 
+    @Autowired
+    private FileStoreService fileStoreService;
+
     @Value("${apix.file.store-dir:./data/files}")
     private String storeDir;
 
     /**
      * 上传文件（多文件）— 对标 Python: insert_file
      *
-     * 流式写入磁盘，不加载到内存。
+     * 流式写入磁盘，不加载到内存，同时持久化文件元数据到 MySQL。
      */
     @PostMapping("/insert_file")
     public R<List<Map<String, String>>> insertFile(
@@ -46,7 +51,8 @@ public class FileController {
             try {
                 String fileId = UUID.randomUUID().toString().replace("-", "");
                 String originalName = file.getOriginalFilename();
-                if (originalName == null) originalName = "unknown";
+                if (originalName == null)
+                    originalName = "unknown";
 
                 // 存储路径: storeDir/clientId/fileId/originalName
                 Path targetDir = Paths.get(storeDir, clientId, fileId);
@@ -60,6 +66,15 @@ public class FileController {
 
                 // 计算 SHA256
                 String sha256 = computeSha256(targetFile);
+
+                // 持久化到 MySQL
+                fileStoreService.saveFile(
+                        originalName,
+                        targetFile.toString(),
+                        file.getSize(),
+                        file.getContentType() != null ? file.getContentType() : "unknown",
+                        clientId,
+                        sha256);
 
                 Map<String, String> fileInfo = new LinkedHashMap<>();
                 fileInfo.put("file_id", fileId);
@@ -101,29 +116,31 @@ public class FileController {
 
             List<Map<String, Object>> files = new ArrayList<>();
             Files.list(clientDir)
-                .sorted((a, b) -> {
-                    try {
-                        return Files.getLastModifiedTime(b).compareTo(Files.getLastModifiedTime(a));
-                    } catch (IOException e) {
-                        return 0;
-                    }
-                })
-                .limit(limit)
-                .forEach(dir -> {
-                    try {
-                        String fileId = dir.getFileName().toString();
-                        Files.list(dir).forEach(file -> {
-                            try {
-                                Map<String, Object> info = new LinkedHashMap<>();
-                                info.put("file_id", fileId);
-                                info.put("file_name", file.getFileName().toString());
-                                info.put("file_size", Files.size(file));
-                                info.put("upload_at", Files.getLastModifiedTime(file).toString());
-                                files.add(info);
-                            } catch (IOException ignored) {}
-                        });
-                    } catch (IOException ignored) {}
-                });
+                    .sorted((a, b) -> {
+                        try {
+                            return Files.getLastModifiedTime(b).compareTo(Files.getLastModifiedTime(a));
+                        } catch (IOException e) {
+                            return 0;
+                        }
+                    })
+                    .limit(limit)
+                    .forEach(dir -> {
+                        try {
+                            String fileId = dir.getFileName().toString();
+                            Files.list(dir).forEach(file -> {
+                                try {
+                                    Map<String, Object> info = new LinkedHashMap<>();
+                                    info.put("file_id", fileId);
+                                    info.put("file_name", file.getFileName().toString());
+                                    info.put("file_size", Files.size(file));
+                                    info.put("upload_at", Files.getLastModifiedTime(file).toString());
+                                    files.add(info);
+                                } catch (IOException ignored) {
+                                }
+                            });
+                        } catch (IOException ignored) {
+                        }
+                    });
 
             return R.ok(files);
 
@@ -142,7 +159,9 @@ public class FileController {
         boolean isDeleted = payload.containsKey("is_deleted") && (boolean) payload.get("is_deleted");
 
         log.info("[File] update_file: id={}, deleted={}", fileId, isDeleted);
-        // TODO: 更新 MySQL 中的记录
+        if (isDeleted) {
+            fileStoreService.softDelete(fileId);
+        }
 
         return R.ok("ok");
     }

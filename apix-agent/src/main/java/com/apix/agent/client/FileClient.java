@@ -25,10 +25,10 @@ public class FileClient {
     private static final Logger log = LoggerFactory.getLogger(FileClient.class);
 
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
-        .build();
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .build();
 
     @Value("${apix.services.file:http://localhost:5094}")
     private String baseUrl;
@@ -39,7 +39,7 @@ public class FileClient {
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> getRecentFiles(String clientId, int limit) {
         try {
-            JSONObject body = new JSONObject(true);
+            JSONObject body = new JSONObject();
             body.put("client_id", clientId);
             body.put("limit", limit);
 
@@ -66,7 +66,7 @@ public class FileClient {
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> searchKnowledgeBase(String clientId, String query, int topK) {
         try {
-            JSONObject body = new JSONObject(true);
+            JSONObject body = new JSONObject();
             body.put("client_id", clientId);
             body.put("query", query);
             body.put("top_k", topK);
@@ -91,11 +91,11 @@ public class FileClient {
     private String post(String path, JSONObject body) throws Exception {
         String url = baseUrl + path;
         Request request = new Request.Builder()
-            .url(url)
-            .addHeader("Content-Type", "application/json")
-            .post(RequestBody.create(MediaType.parse("application/json"),
-                body.toJSONString()))
-            .build();
+                .url(url)
+                .addHeader("Content-Type", "application/json")
+                .post(RequestBody.create(MediaType.parse("application/json"),
+                        body.toJSONString()))
+                .build();
 
         try (Response resp = httpClient.newCall(request).execute()) {
             if (!resp.isSuccessful()) {

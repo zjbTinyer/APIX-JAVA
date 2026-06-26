@@ -27,10 +27,10 @@ public class LlmAdapter {
     private static final Logger log = LoggerFactory.getLogger(LlmAdapter.class);
 
     private static final OkHttpClient HTTP_CLIENT = new OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .build();
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build();
 
     private final String provider;
     private final String model;
@@ -40,7 +40,7 @@ public class LlmAdapter {
     private final double temperature;
 
     public LlmAdapter(String provider, String model, String apiKey, String baseUrl,
-                      boolean enableThink, double temperature) {
+            boolean enableThink, double temperature) {
         this.provider = provider;
         this.model = model;
         this.apiKey = apiKey;
@@ -90,9 +90,11 @@ public class LlmAdapter {
      *
      * @param messages 消息列表
      * @param config   Agent 配置
+     * @param tools    可选的工具列表（用于 function calling）
      * @return 响应 Map: {content, role, tool_calls?, reasoning_content?}
      */
-    public Map<String, Object> call(List<Map<String, Object>> messages, AgentConfig config) {
+    public Map<String, Object> call(List<Map<String, Object>> messages, AgentConfig config,
+            List<Map<String, Object>> tools) {
         switch (provider) {
             case "openai":
             case "deepseek":
@@ -100,13 +102,13 @@ public class LlmAdapter {
             case "xiaomimimo":
             case "qwen":
             case "qianfan":
-                return callOpenAiChat(messages, false, config);
+                return callOpenAiChat(messages, false, config, tools);
             case "ollama:local":
             case "ollama":
                 return callOllamaChat(messages);
             default:
                 if (provider.startsWith("custom-")) {
-                    return callOpenAiChat(messages, false, config);
+                    return callOpenAiChat(messages, false, config, tools);
                 }
                 throw new ProviderNotFoundException("Unsupported: " + provider, provider);
         }
@@ -116,9 +118,15 @@ public class LlmAdapter {
 
     /**
      * 流式调用 LLM（SSE 流式返回）。
+     *
+     * @param messages 消息列表
+     * @param config   Agent 配置
+     * @param tools    可选的工具列表（用于 function calling）
+     * @param callback 流式回调
      */
     public void streamCall(List<Map<String, Object>> messages, AgentConfig config,
-                           StreamCallback callback) {
+            List<Map<String, Object>> tools,
+            StreamCallback callback) {
         try {
             switch (provider) {
                 case "openai":
@@ -126,7 +134,7 @@ public class LlmAdapter {
                 case "moonshot":
                 case "xiaomimimo":
                 case "qwen":
-                    streamOpenAiChat(messages, config, callback);
+                    streamOpenAiChat(messages, config, callback, tools);
                     break;
                 case "ollama:local":
                 case "ollama":
@@ -134,7 +142,7 @@ public class LlmAdapter {
                     break;
                 default:
                     if (provider.startsWith("custom-")) {
-                        streamOpenAiChat(messages, config, callback);
+                        streamOpenAiChat(messages, config, callback, tools);
                     } else {
                         callback.onError(new ProviderNotFoundException("Unsupported: " + provider));
                     }
@@ -150,16 +158,17 @@ public class LlmAdapter {
      * OpenAI 兼容非流式 chat completions。
      */
     private Map<String, Object> callOpenAiChat(List<Map<String, Object>> messages,
-                                                boolean isSubCall, AgentConfig config) {
-        JSONObject body = buildOpenAiBody(messages);
+            boolean isSubCall, AgentConfig config,
+            List<Map<String, Object>> tools) {
+        JSONObject body = buildOpenAiBody(messages, tools);
 
         Request request = new Request.Builder()
-            .url(baseUrl + "/chat/completions")
-            .addHeader("Authorization", "Bearer " + apiKey)
-            .addHeader("Content-Type", "application/json")
-            .post(RequestBody.create(MediaType.parse("application/json"),
-                body.toJSONString()))
-            .build();
+                .url(baseUrl + "/chat/completions")
+                .addHeader("Authorization", "Bearer " + apiKey)
+                .addHeader("Content-Type", "application/json")
+                .post(RequestBody.create(MediaType.parse("application/json"),
+                        body.toJSONString()))
+                .build();
 
         try (Response resp = HTTP_CLIENT.newCall(request).execute()) {
             if (!resp.isSuccessful()) {
@@ -181,18 +190,19 @@ public class LlmAdapter {
      * OpenAI 兼容流式 chat completions（SSE）。
      */
     private void streamOpenAiChat(List<Map<String, Object>> messages,
-                                   AgentConfig config, StreamCallback callback) throws Exception {
-        JSONObject body = buildOpenAiBody(messages);
+            AgentConfig config, StreamCallback callback,
+            List<Map<String, Object>> tools) throws Exception {
+        JSONObject body = buildOpenAiBody(messages, tools);
         body.put("stream", true);
 
         Request request = new Request.Builder()
-            .url(baseUrl + "/chat/completions")
-            .addHeader("Authorization", "Bearer " + apiKey)
-            .addHeader("Content-Type", "application/json")
-            .addHeader("Accept", "text/event-stream")
-            .post(RequestBody.create(MediaType.parse("application/json"),
-                body.toJSONString()))
-            .build();
+                .url(baseUrl + "/chat/completions")
+                .addHeader("Authorization", "Bearer " + apiKey)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Accept", "text/event-stream")
+                .post(RequestBody.create(MediaType.parse("application/json"),
+                        body.toJSONString()))
+                .build();
 
         StringBuilder contentBuffer = new StringBuilder();
         StringBuilder reasoningBuffer = new StringBuilder();
@@ -206,37 +216,49 @@ public class LlmAdapter {
             }
 
             BufferedReader reader = new BufferedReader(
-                new InputStreamReader(resp.body() != null ? resp.body().byteStream() : new java.io.ByteArrayInputStream(new byte[0]),
-                    StandardCharsets.UTF_8));
+                    new InputStreamReader(
+                            resp.body() != null ? resp.body().byteStream()
+                                    : new java.io.ByteArrayInputStream(new byte[0]),
+                            StandardCharsets.UTF_8));
 
             String line;
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
-                if (line.isEmpty() || line.startsWith(":")) continue;     // 心跳
-                if (!line.startsWith("data: ")) continue;
+                if (line.isEmpty() || line.startsWith(":"))
+                    continue; // 心跳
+                if (!line.startsWith("data: "))
+                    continue;
 
                 String data = line.substring(6).trim();
-                if ("[DONE]".equals(data)) break;
+                if ("[DONE]".equals(data))
+                    break;
 
                 try {
                     JSONObject chunk = JSON.parseObject(data);
                     List<JSONObject> choices = parseChoices(chunk);
-                    if (choices.isEmpty()) continue;
+                    if (choices.isEmpty())
+                        continue;
 
                     JSONObject delta = choices.get(0).getJSONObject("delta");
-                    if (delta == null) continue;
+                    if (delta == null)
+                        continue;
 
                     String content = delta.getString("content");
                     String reasoning = delta.getString("reasoning_content");
                     finishReason = choices.get(0).getString("finish_reason");
 
-                    if (content != null) contentBuffer.append(content);
-                    if (reasoning != null) reasoningBuffer.append(reasoning);
+                    if (content != null)
+                        contentBuffer.append(content);
+                    if (reasoning != null)
+                        reasoningBuffer.append(reasoning);
 
                     Map<String, Object> chunkMap = new LinkedHashMap<>();
-                    if (content != null) chunkMap.put("content", content);
-                    if (reasoning != null) chunkMap.put("reasoning_content", reasoning);
-                    if (!chunkMap.isEmpty()) callback.onChunk(chunkMap);
+                    if (content != null)
+                        chunkMap.put("content", content);
+                    if (reasoning != null)
+                        chunkMap.put("reasoning_content", reasoning);
+                    if (!chunkMap.isEmpty())
+                        callback.onChunk(chunkMap);
 
                 } catch (Exception ignored) {
                     // 跳过解析失败的 chunk
@@ -260,9 +282,13 @@ public class LlmAdapter {
 
     /**
      * 构建 OpenAI 兼容的请求体。
+     *
+     * @param messages 消息列表
+     * @param tools    可选的工具列表（用于 function calling），传 null 表示不使用工具
      */
-    private JSONObject buildOpenAiBody(List<Map<String, Object>> messages) {
-        JSONObject body = new JSONObject(true);
+    private JSONObject buildOpenAiBody(List<Map<String, Object>> messages,
+            List<Map<String, Object>> tools) {
+        JSONObject body = new JSONObject();
         body.put("model", model);
         body.put("temperature", temperature);
         body.put("stream", false);
@@ -270,7 +296,7 @@ public class LlmAdapter {
         // 转换消息格式
         JSONArray msgArray = new JSONArray();
         for (Map<String, Object> msg : messages) {
-            JSONObject m = new JSONObject(true);
+            JSONObject m = new JSONObject();
             m.put("role", msg.getOrDefault("role", "user"));
             m.put("content", msg.getOrDefault("content", ""));
             // 保留 reasoning_content（DeepSeek 思考链回传）
@@ -282,9 +308,14 @@ public class LlmAdapter {
         }
         body.put("messages", msgArray);
 
+        // 工具列表（function calling）
+        if (tools != null && !tools.isEmpty()) {
+            body.put("tools", tools);
+        }
+
         // DeepSeek 思考模式
         if (enableThink) {
-            JSONObject thinking = new JSONObject(true);
+            JSONObject thinking = new JSONObject();
             thinking.put("type", "enabled");
             body.put("thinking", thinking);
         }
@@ -309,7 +340,8 @@ public class LlmAdapter {
         JSONObject message = choice.getJSONObject("message");
         if (message == null) {
             JSONObject delta = choice.getJSONObject("delta");
-            if (delta != null) message = delta;
+            if (delta != null)
+                message = delta;
         }
 
         if (message == null) {
@@ -318,8 +350,7 @@ public class LlmAdapter {
         }
 
         // content
-        result.put("content", message.getString("content") != null ?
-            message.getString("content") : "");
+        result.put("content", message.getString("content") != null ? message.getString("content") : "");
 
         // reasoning_content（DeepSeek 思考链）
         String reasoning = message.getString("reasoning_content");
@@ -371,7 +402,8 @@ public class LlmAdapter {
     private List<JSONObject> parseChoices(JSONObject json) {
         List<JSONObject> result = new ArrayList<>();
         JSONArray choices = json.getJSONArray("choices");
-        if (choices == null) return result;
+        if (choices == null)
+            return result;
         for (int i = 0; i < choices.size(); i++) {
             result.add(choices.getJSONObject(i));
         }
@@ -381,13 +413,13 @@ public class LlmAdapter {
     // ==================== Ollama ====================
 
     private Map<String, Object> callOllamaChat(List<Map<String, Object>> messages) {
-        JSONObject body = new JSONObject(true);
+        JSONObject body = new JSONObject();
         body.put("model", model);
         body.put("stream", false);
 
         JSONArray msgArray = new JSONArray();
         for (Map<String, Object> msg : messages) {
-            JSONObject m = new JSONObject(true);
+            JSONObject m = new JSONObject();
             m.put("role", msg.getOrDefault("role", "user"));
             m.put("content", msg.getOrDefault("content", ""));
             msgArray.add(m);
@@ -395,11 +427,11 @@ public class LlmAdapter {
         body.put("messages", msgArray);
 
         Request request = new Request.Builder()
-            .url(baseUrl + "/api/chat")
-            .addHeader("Content-Type", "application/json")
-            .post(RequestBody.create(MediaType.parse("application/json"),
-                body.toJSONString()))
-            .build();
+                .url(baseUrl + "/api/chat")
+                .addHeader("Content-Type", "application/json")
+                .post(RequestBody.create(MediaType.parse("application/json"),
+                        body.toJSONString()))
+                .build();
 
         try (Response resp = HTTP_CLIENT.newCall(request).execute()) {
             if (!resp.isSuccessful()) {
@@ -410,8 +442,8 @@ public class LlmAdapter {
 
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("role", "assistant");
-            result.put("content", json.getString("message") != null ?
-                json.getJSONObject("message").getString("content") : "");
+            result.put("content",
+                    json.getString("message") != null ? json.getJSONObject("message").getString("content") : "");
             return result;
 
         } catch (Exception e) {
@@ -420,14 +452,14 @@ public class LlmAdapter {
     }
 
     private void streamOllamaChat(List<Map<String, Object>> messages,
-                                   StreamCallback callback) throws Exception {
-        JSONObject body = new JSONObject(true);
+            StreamCallback callback) throws Exception {
+        JSONObject body = new JSONObject();
         body.put("model", model);
         body.put("stream", true);
 
         JSONArray msgArray = new JSONArray();
         for (Map<String, Object> msg : messages) {
-            JSONObject m = new JSONObject(true);
+            JSONObject m = new JSONObject();
             m.put("role", msg.getOrDefault("role", "user"));
             m.put("content", msg.getOrDefault("content", ""));
             msgArray.add(m);
@@ -435,11 +467,11 @@ public class LlmAdapter {
         body.put("messages", msgArray);
 
         Request request = new Request.Builder()
-            .url(baseUrl + "/api/chat")
-            .addHeader("Content-Type", "application/json")
-            .post(RequestBody.create(MediaType.parse("application/json"),
-                body.toJSONString()))
-            .build();
+                .url(baseUrl + "/api/chat")
+                .addHeader("Content-Type", "application/json")
+                .post(RequestBody.create(MediaType.parse("application/json"),
+                        body.toJSONString()))
+                .build();
 
         StringBuilder contentBuffer = new StringBuilder();
 
@@ -450,14 +482,15 @@ public class LlmAdapter {
             }
 
             BufferedReader reader = new BufferedReader(
-                new InputStreamReader(resp.body() != null ? resp.body().byteStream()
-                    : new java.io.ByteArrayInputStream(new byte[0]),
-                    StandardCharsets.UTF_8));
+                    new InputStreamReader(resp.body() != null ? resp.body().byteStream()
+                            : new java.io.ByteArrayInputStream(new byte[0]),
+                            StandardCharsets.UTF_8));
 
             String line;
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
-                if (line.isEmpty()) continue;
+                if (line.isEmpty())
+                    continue;
 
                 try {
                     JSONObject chunk = JSON.parseObject(line);
@@ -468,8 +501,10 @@ public class LlmAdapter {
                         chunkMap.put("content", content);
                         callback.onChunk(chunkMap);
                     }
-                    if (Boolean.TRUE.equals(chunk.getBoolean("done"))) break;
-                } catch (Exception ignored) {}
+                    if (Boolean.TRUE.equals(chunk.getBoolean("done")))
+                        break;
+                } catch (Exception ignored) {
+                }
             }
         }
 
@@ -483,12 +518,19 @@ public class LlmAdapter {
 
     public interface StreamCallback {
         void onChunk(Map<String, Object> chunk);
+
         void onDone(Map<String, Object> finalResponse);
+
         void onError(Exception e);
     }
 
     // ==================== Accessors ====================
 
-    public String getProvider() { return provider; }
-    public String getModel() { return model; }
+    public String getProvider() {
+        return provider;
+    }
+
+    public String getModel() {
+        return model;
+    }
 }

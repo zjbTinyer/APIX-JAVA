@@ -5,8 +5,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
@@ -38,7 +38,7 @@ public class DockerSandboxManager {
     @PostConstruct
     public void init() {
         containerTtlMs = TimeUnit.SECONDS.toMillis(
-            containerTtlMs > 0 ? containerTtlMs : 6000);
+                containerTtlMs > 0 ? containerTtlMs : 6000);
         log.info("[DockerSandbox] Initialized with image={}, ttl={}ms", sandboxImage, containerTtlMs);
     }
 
@@ -85,7 +85,7 @@ public class DockerSandboxManager {
      */
     public String execInSandbox(String containerId, String command) {
         try {
-            String[] cmd = {"docker", "exec", containerId, "bash", "-c", command};
+            String[] cmd = { "docker", "exec", containerId, "bash", "-c", command };
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.redirectErrorStream(true);
 
@@ -132,13 +132,13 @@ public class DockerSandboxManager {
             String containerName = "apix-sandbox-" + Long.toHexString(System.nanoTime());
 
             String[] cmd = {
-                "docker", "run", "-d",
-                "--name", containerName,
-                "-v", workPath + ":/workspace",
-                "-w", "/workspace",
-                "--restart", "no",
-                sandboxImage,
-                "tail", "-f", "/dev/null"  // 保持容器运行
+                    "docker", "run", "-d",
+                    "--name", containerName,
+                    "-v", workPath + ":/workspace",
+                    "-w", "/workspace",
+                    "--restart", "no",
+                    sandboxImage,
+                    "tail", "-f", "/dev/null" // 保持容器运行
             };
 
             ProcessBuilder pb = new ProcessBuilder(cmd);
@@ -170,7 +170,7 @@ public class DockerSandboxManager {
 
     private boolean isContainerRunning(String containerId) {
         try {
-            String[] cmd = {"docker", "inspect", "-f", "{{.State.Running}}", containerId};
+            String[] cmd = { "docker", "inspect", "-f", "{{.State.Running}}", containerId };
             ProcessBuilder pb = new ProcessBuilder(cmd);
             Process process = pb.start();
 
@@ -189,10 +189,10 @@ public class DockerSandboxManager {
         try {
             // 先尝试停止
             new ProcessBuilder("docker", "stop", containerId)
-                .start().waitFor(10, TimeUnit.SECONDS);
+                    .start().waitFor(10, TimeUnit.SECONDS);
             // 再删除
             new ProcessBuilder("docker", "rm", containerId)
-                .start().waitFor(10, TimeUnit.SECONDS);
+                    .start().waitFor(10, TimeUnit.SECONDS);
             log.info("[DockerSandbox] Removed container: {}", containerId);
 
         } catch (Exception e) {
@@ -207,7 +207,7 @@ public class DockerSandboxManager {
         ContainerInfo(String containerId) {
             this.containerId = containerId;
             this.expireAt = System.currentTimeMillis() +
-                TimeUnit.SECONDS.toMillis(6000);
+                    TimeUnit.SECONDS.toMillis(6000);
         }
     }
 }

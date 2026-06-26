@@ -9,8 +9,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
@@ -84,9 +84,9 @@ public class AgentRuntime {
      * @param generationId 生成 ID（用于中止跟踪）
      */
     public void executeAgentAsync(MainAgentState state, AgentStreamWriter writer,
-                                   String generationId) {
+            String generationId) {
         AgentGraph graph = agentCreator.createAgent(
-            state.getAgentName(), state.getAgentRole(), state.getConfig());
+                state.getAgentName(), state.getAgentRole(), state.getConfig());
 
         // 异步提交到线程池
         Future<?> future = executor.submit(() -> {
@@ -94,8 +94,8 @@ public class AgentRuntime {
                 log.info("[AgentRuntime] Starting async agent execution: genId={}", generationId);
 
                 // 检查是否被中止
-                GenerationManager.GenerationState genState =
-                    generationManager.getGeneration(state.getClientId(), generationId);
+                GenerationManager.GenerationState genState = generationManager.getGeneration(state.getClientId(),
+                        generationId);
                 if (genState == null || "aborted".equals(genState.status)) {
                     log.warn("[AgentRuntime] Generation aborted before execution: {}", generationId);
                     return;
@@ -178,26 +178,58 @@ public class AgentRuntime {
         while (running.get()) {
             try {
                 SubAgentTask task = taskQueue.poll(1, TimeUnit.SECONDS);
-                if (task == null) continue;
+                if (task == null)
+                    continue;
 
                 String taskId = (String) task.initialState.get("taskId");
                 String historyId = (String) task.initialState.get("historyId");
 
                 // 更新状态为 in_progress
                 updateTaskState(historyId, taskId, "status", "in_progress");
+                updateTaskState(historyId, taskId, "startedAt", System.currentTimeMillis());
 
-                // 创建子 Agent
+                // 创建子 Agent 图
                 AgentGraph graph = agentCreator.createSubAgent(
-                    task.agentName,
-                    (String) task.initialState.get("agentRole"),
-                    task.config
-                );
+                        task.agentName,
+                        (String) task.initialState.get("agentRole"),
+                        task.config);
 
-                // 执行
-                // TODO: 实际的子 Agent 图执行逻辑
-                log.info("[SubAgentWorker] Executing task: {}", taskId);
+                // 构建子 Agent 状态
+                MainAgentState subState = new MainAgentState();
+                subState.setAgentName(task.agentName);
+                subState.setAgentRole((String) task.initialState.getOrDefault("agentRole", "sub_agent"));
+                subState.setClientId((String) task.initialState.getOrDefault("clientId", "sub-agent"));
+                subState.setHistoryId(historyId);
+                subState.setGenerationId(taskId);
+                subState.setConfig(task.config);
+                subState.setInput(task.initialState);
+                subState.setMessages(new java.util.ArrayList<>());
+                subState.setTimestamp(System.currentTimeMillis() / 1000);
 
+                log.info("[SubAgentWorker] Executing task: {} (agent={})", taskId, task.agentName);
+
+                // 执行子 Agent 图
+                MainAgentState finalState = graph.execute(subState, null);
+
+                // 提取执行结果
+                String resultContent = "";
+                if (finalState.getMessages() != null) {
+                    for (int i = finalState.getMessages().size() - 1; i >= 0; i--) {
+                        java.util.Map<String, Object> msg = finalState.getMessages().get(i);
+                        if ("assistant".equals(msg.get("role"))) {
+                            resultContent = (String) msg.getOrDefault("content", "");
+                            break;
+                        }
+                    }
+                }
+
+                // 更新状态为 completed
                 updateTaskState(historyId, taskId, "status", "completed");
+                updateTaskState(historyId, taskId, "result", resultContent);
+                updateTaskState(historyId, taskId, "completedAt", System.currentTimeMillis());
+                updateTaskState(historyId, taskId, "llmCalls", finalState.getLlmCalls());
+
+                log.info("[SubAgentWorker] Task completed: {} (llmCalls={})", taskId, finalState.getLlmCalls());
 
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -214,7 +246,8 @@ public class AgentRuntime {
         while (running.get()) {
             try {
                 String taskId = stopRequestQueue.poll(1, TimeUnit.SECONDS);
-                if (taskId == null) continue;
+                if (taskId == null)
+                    continue;
 
                 Future<?> future = runningTasks.get(taskId);
                 if (future != null && !future.isDone()) {

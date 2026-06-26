@@ -44,10 +44,14 @@ public class LlmCallNode implements AgentNode {
 
         try {
             AgentConfig config = state.getConfig();
-            if (config == null) throw new RuntimeException("AgentConfig is null");
+            if (config == null)
+                throw new RuntimeException("AgentConfig is null");
 
             List<Map<String, Object>> messages = state.getMessages();
             LlmAdapter adapter = LlmAdapter.create(config);
+
+            // 构建工具列表（function calling），将配置中的权限开关映射为 LLM 可用的工具
+            List<Map<String, Object>> tools = buildToolsForLlm(state, config);
 
             // 判断是否支持流式推送（有 WebSocket 连接时）
             StreamWriter writer = state.getStreamWriter();
@@ -55,10 +59,10 @@ public class LlmCallNode implements AgentNode {
 
             if (streaming) {
                 // ====== 流式路径：逐 token 推送 think_chunk_rtn / content_chunk_rtn ======
-                return executeStreaming(state, adapter, messages, config, writer);
+                return executeStreaming(state, adapter, messages, config, writer, tools);
             } else {
                 // ====== 非流式路径（HTTP 测试或纯聊天） ======
-                return executeNonStreaming(state, adapter, messages, config);
+                return executeNonStreaming(state, adapter, messages, config, tools);
             }
 
         } catch (ConflictToolCallsException e) {
@@ -86,8 +90,9 @@ public class LlmCallNode implements AgentNode {
      */
     @SuppressWarnings("unchecked")
     private String executeStreaming(MainAgentState state, LlmAdapter adapter,
-                                     List<Map<String, Object>> messages,
-                                     AgentConfig config, StreamWriter writer) throws Exception {
+            List<Map<String, Object>> messages,
+            AgentConfig config, StreamWriter writer,
+            List<Map<String, Object>> tools) throws Exception {
         long startTime = System.currentTimeMillis();
 
         // 流式响应收集
@@ -99,8 +104,8 @@ public class LlmCallNode implements AgentNode {
         Object lock = new Object();
         boolean[] done = { false };
 
-        // 发起流式调用
-        adapter.streamCall(messages, config, new LlmAdapter.StreamCallback() {
+        // 发起流式调用（传入工具列表以实现 function calling）
+        adapter.streamCall(messages, config, tools, new LlmAdapter.StreamCallback() {
             @Override
             public void onChunk(Map<String, Object> chunk) {
                 ApixEventEnvelopeTarget target = state.getTarget();
@@ -131,19 +136,26 @@ public class LlmCallNode implements AgentNode {
             @Override
             public void onDone(Map<String, Object> response) {
                 finalResponse[0] = response;
-                synchronized (lock) { done[0] = true; lock.notify(); }
+                synchronized (lock) {
+                    done[0] = true;
+                    lock.notify();
+                }
             }
 
             @Override
             public void onError(Exception e) {
                 finalError[0] = e;
-                synchronized (lock) { done[0] = true; lock.notify(); }
+                synchronized (lock) {
+                    done[0] = true;
+                    lock.notify();
+                }
             }
         });
 
         // 等待流式完成
         synchronized (lock) {
-            if (!done[0]) lock.wait();
+            if (!done[0])
+                lock.wait();
         }
         if (finalError[0] != null) {
             throw new RuntimeException("Stream error", finalError[0]);
@@ -151,19 +163,19 @@ public class LlmCallNode implements AgentNode {
 
         long duration = System.currentTimeMillis() - startTime;
         log.info("[LlmCallNode] Streaming completed in {}ms ({} reasoning + {} content)",
-            duration, fullReasoning.length(), fullContent.length());
+                duration, fullReasoning.length(), fullContent.length());
 
         // 构造 AI 消息
         Map<String, Object> response = finalResponse[0];
-        if (response == null) response = new LinkedHashMap<>();
+        if (response == null)
+            response = new LinkedHashMap<>();
 
         String content = fullContent.length() > 0 ? fullContent.toString()
-            : (String) response.getOrDefault("content", "");
+                : (String) response.getOrDefault("content", "");
         String reasoning = fullReasoning.length() > 0 ? fullReasoning.toString()
-            : (String) response.get("reasoning_content");
+                : (String) response.get("reasoning_content");
 
-        List<Map<String, Object>> toolCalls =
-            (List<Map<String, Object>>) response.get("tool_calls");
+        List<Map<String, Object>> toolCalls = (List<Map<String, Object>>) response.get("tool_calls");
 
         Map<String, Object> aiMessage = new LinkedHashMap<>();
         aiMessage.put("role", "assistant");
@@ -190,7 +202,7 @@ public class LlmCallNode implements AgentNode {
         }
 
         log.info("[LlmCallNode] Streaming text response: reasoning={}chars, content={}chars",
-            reasoning != null ? reasoning.length() : 0, content.length());
+                reasoning != null ? reasoning.length() : 0, content.length());
         return AgentGraph.NODE_MESSAGES_PERSIST;
     }
 
@@ -199,23 +211,25 @@ public class LlmCallNode implements AgentNode {
      */
     @SuppressWarnings("unchecked")
     private String executeNonStreaming(MainAgentState state, LlmAdapter adapter,
-                                        List<Map<String, Object>> messages,
-                                        AgentConfig config) {
+            List<Map<String, Object>> messages,
+            AgentConfig config,
+            List<Map<String, Object>> tools) {
         long startTime = System.currentTimeMillis();
-        Map<String, Object> response = adapter.call(messages, config);
+        Map<String, Object> response = adapter.call(messages, config, tools);
         long duration = System.currentTimeMillis() - startTime;
         log.info("[LlmCallNode] LLM responded in {}ms", duration);
 
         String finishReason = (String) response.getOrDefault("finish_reason", "stop");
-        List<Map<String, Object>> toolCalls =
-            (List<Map<String, Object>>) response.get("tool_calls");
+        List<Map<String, Object>> toolCalls = (List<Map<String, Object>>) response.get("tool_calls");
 
         Map<String, Object> aiMessage = new LinkedHashMap<>();
         aiMessage.put("role", "assistant");
         aiMessage.put("content", response.getOrDefault("content", ""));
         Object reasoning = response.get("reasoning_content");
-        if (reasoning != null) aiMessage.put("reasoning_content", reasoning);
-        if (toolCalls != null && !toolCalls.isEmpty()) aiMessage.put("tool_calls", toolCalls);
+        if (reasoning != null)
+            aiMessage.put("reasoning_content", reasoning);
+        if (toolCalls != null && !toolCalls.isEmpty())
+            aiMessage.put("tool_calls", toolCalls);
         state.getMessages().add(aiMessage);
         state.setLlmCalls(state.getLlmCalls() + 1);
 
@@ -244,13 +258,20 @@ public class LlmCallNode implements AgentNode {
 
         // 根据配置收集权限
         List<String> permissions = new ArrayList<>();
-        if (config.isEnableFileOperation()) permissions.add("file_operation");
-        if (config.isEnableWebSearch()) permissions.add("web_search");
-        if (config.isEnableKnowledgeRetrieval()) permissions.add("knowledge_retrieval");
-        if (config.isEnableCommandOperation()) permissions.add("command_operation");
-        if (config.isEnableSkillLoad()) permissions.add("skill_load");
-        if (config.isEnableAgentAssign()) permissions.add("agent_assign");
-        if (config.isEnableTaskFlow()) permissions.add("task_flow");
+        if (config.isEnableFileOperation())
+            permissions.add("file_operation");
+        if (config.isEnableWebSearch())
+            permissions.add("web_search");
+        if (config.isEnableKnowledgeRetrieval())
+            permissions.add("knowledge_retrieval");
+        if (config.isEnableCommandOperation())
+            permissions.add("command_operation");
+        if (config.isEnableSkillLoad())
+            permissions.add("skill_load");
+        if (config.isEnableAgentAssign())
+            permissions.add("agent_assign");
+        if (config.isEnableTaskFlow())
+            permissions.add("task_flow");
         permissions.add("default"); // 始终包含默认工具
 
         String role = state.getAgentRole();
@@ -274,7 +295,7 @@ public class LlmCallNode implements AgentNode {
             if (conflictTools.contains(name)) {
                 if (!seen.add(name)) {
                     throw new ConflictToolCallsException(
-                        "Conflict tool calls: " + name, seen);
+                            "Conflict tool calls: " + name, seen);
                 }
             }
         }
@@ -310,13 +331,15 @@ public class LlmCallNode implements AgentNode {
     private String extractToolName(Map<String, Object> tc) {
         // 直接 name
         String name = (String) tc.get("name");
-        if (name != null) return name;
+        if (name != null)
+            return name;
 
         // function.name
         Object func = tc.get("function");
         if (func instanceof Map) {
             name = (String) ((Map<String, Object>) func).get("name");
-            if (name != null) return name;
+            if (name != null)
+                return name;
         }
 
         return null;
@@ -326,15 +349,19 @@ public class LlmCallNode implements AgentNode {
     private String extractToolArgs(Map<String, Object> tc) {
         // 直接 arguments
         Object args = tc.get("arguments");
-        if (args instanceof String) return (String) args;
-        if (args != null) return com.alibaba.fastjson.JSON.toJSONString(args);
+        if (args instanceof String)
+            return (String) args;
+        if (args != null)
+            return com.alibaba.fastjson.JSON.toJSONString(args);
 
         // function.arguments
         Object func = tc.get("function");
         if (func instanceof Map) {
             args = ((Map<String, Object>) func).get("arguments");
-            if (args instanceof String) return (String) args;
-            if (args != null) return com.alibaba.fastjson.JSON.toJSONString(args);
+            if (args instanceof String)
+                return (String) args;
+            if (args != null)
+                return com.alibaba.fastjson.JSON.toJSONString(args);
         }
 
         return "{}";
@@ -343,7 +370,8 @@ public class LlmCallNode implements AgentNode {
     @SuppressWarnings("unchecked")
     private Map<String, Object> parseArgs(String argsStr) {
         try {
-            if (argsStr == null || argsStr.isEmpty()) return new LinkedHashMap<>();
+            if (argsStr == null || argsStr.isEmpty())
+                return new LinkedHashMap<>();
             return com.alibaba.fastjson.JSON.parseObject(argsStr);
         } catch (Exception e) {
             return new LinkedHashMap<>();

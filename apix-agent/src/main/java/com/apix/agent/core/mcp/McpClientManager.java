@@ -7,10 +7,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PreDestroy;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
+import jakarta.annotation.PreDestroy;
+import java.io.*;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -39,13 +37,12 @@ public class McpClientManager {
     private final Map<String, List<McpConnection>> connections = new ConcurrentHashMap<>();
 
     private final HttpClient httpClient = HttpClient.newBuilder()
-        .connectTimeout(java.time.Duration.ofSeconds(10))
-        .build();
+            .connectTimeout(java.time.Duration.ofSeconds(10))
+            .build();
 
     @PreDestroy
     public void cleanup() {
-        connections.values().forEach(list ->
-            list.forEach(McpConnection::close));
+        connections.values().forEach(list -> list.forEach(McpConnection::close));
         connections.clear();
     }
 
@@ -82,7 +79,8 @@ public class McpClientManager {
     public List<McpToolInfo> loadAllMcpTools(String clientId) {
         List<McpToolInfo> allTools = new ArrayList<>();
         List<McpConnection> conns = connections.get(clientId);
-        if (conns == null) return allTools;
+        if (conns == null)
+            return allTools;
 
         for (McpConnection conn : conns) {
             try {
@@ -110,7 +108,7 @@ public class McpClientManager {
                 return callTool(conn, toolName, args);
             } catch (Exception e) {
                 log.debug("[MCP] Connection {} cannot handle tool {}: {}",
-                    conn.name, toolName, e.getMessage());
+                        conn.name, toolName, e.getMessage());
             }
         }
 
@@ -136,26 +134,27 @@ public class McpClientManager {
      * 通过 HTTP 发现工具（SSE / HTTP 传输）。
      */
     private List<McpToolInfo> discoverViaHttp(McpConnection conn) throws Exception {
-        JSONObject request = new JSONObject(true);
+        JSONObject request = new JSONObject();
         request.put("jsonrpc", "2.0");
         request.put("method", "tools/list");
         request.put("id", UUID.randomUUID().toString());
 
         HttpRequest req = HttpRequest.newBuilder()
-            .uri(URI.create(conn.url))
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(request.toJSONString()))
-            .timeout(java.time.Duration.ofSeconds(10))
-            .build();
+                .uri(URI.create(conn.url))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(request.toJSONString()))
+                .timeout(java.time.Duration.ofSeconds(10))
+                .build();
 
         HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
         JSONObject json = JSON.parseObject(resp.body());
 
         List<McpToolInfo> tools = new ArrayList<>();
         JSONArray resultArray = json.getJSONObject("result") != null
-            ? json.getJSONObject("result").getJSONArray("tools")
-            : null;
-        if (resultArray == null) return tools;
+                ? json.getJSONObject("result").getJSONArray("tools")
+                : null;
+        if (resultArray == null)
+            return tools;
 
         for (int i = 0; i < resultArray.size(); i++) {
             JSONObject t = resultArray.getJSONObject(i);
@@ -171,13 +170,131 @@ public class McpClientManager {
     }
 
     /**
-     * 通过 Stdio 发现工具。
+     * 通过 Stdio 发现工具 — 启动子进程并通过 JSON-RPC over stdio 通信。
      */
     private List<McpToolInfo> discoverViaStdio(McpConnection conn) throws Exception {
-        // 通过子进程 stdio 通信，发送 tools/list 请求
-        // 简化版：需要实现 JSON-RPC over stdio
         log.info("[MCP] Stdio discovery for {}: command={}", conn.name, conn.command);
-        return Collections.emptyList();
+        List<McpToolInfo> tools = new ArrayList<>();
+
+        Process process = startStdioProcess(conn);
+        if (process == null)
+            return tools;
+
+        // 发送 tools/list 请求
+        JSONObject request = new JSONObject();
+        request.put("jsonrpc", "2.0");
+        request.put("method", "tools/list");
+        request.put("id", "1");
+
+        String response = sendStdioRequest(process, request.toJSONString());
+        if (response == null)
+            return tools;
+
+        JSONObject json = JSON.parseObject(response);
+        JSONArray resultArray = json.getJSONObject("result") != null
+                ? json.getJSONObject("result").getJSONArray("tools")
+                : null;
+        if (resultArray == null)
+            return tools;
+
+        for (int i = 0; i < resultArray.size(); i++) {
+            JSONObject t = resultArray.getJSONObject(i);
+            McpToolInfo info = new McpToolInfo();
+            info.name = conn.name + "_" + t.getString("name");
+            info.description = t.getString("description");
+            info.inputSchema = t.getJSONObject("inputSchema");
+            info.connectionName = conn.name;
+            tools.add(info);
+        }
+
+        log.info("[MCP] Stdio discovered {} tools from {}", tools.size(), conn.name);
+        return tools;
+    }
+
+    /**
+     * 通过 Stdio 调用工具。
+     */
+    private String callViaStdio(McpConnection conn, String toolName, Map<String, Object> args) throws Exception {
+        log.info("[MCP] Stdio call: {} → {} on {}", toolName, conn.name);
+
+        Process process = startStdioProcess(conn);
+        if (process == null)
+            return "Error: Failed to start stdio process for " + conn.name;
+
+        JSONObject params = new JSONObject();
+        params.put("name", toolName);
+        params.put("arguments", args);
+
+        JSONObject request = new JSONObject();
+        request.put("jsonrpc", "2.0");
+        request.put("method", "tools/call");
+        request.put("id", "2");
+        request.put("params", params);
+
+        String response = sendStdioRequest(process, request.toJSONString());
+        if (response == null)
+            return "Error: No response from " + conn.name;
+
+        JSONObject json = JSON.parseObject(response);
+        JSONObject result = json.getJSONObject("result");
+        if (result != null) {
+            JSONObject content = result.getJSONObject("content");
+            return content != null ? content.toJSONString() : result.toJSONString();
+        }
+        JSONObject err = json.getJSONObject("error");
+        return err != null ? "Error: " + err.toJSONString() : response;
+    }
+
+    /**
+     * 启动 Stdio 子进程。
+     */
+    private Process startStdioProcess(McpConnection conn) {
+        try {
+            if (conn.process != null && conn.process.isAlive()) {
+                return conn.process;
+            }
+            // 解析命令和参数
+            String[] parts = conn.command.split("\\s+");
+            ProcessBuilder pb = new ProcessBuilder(parts);
+            pb.redirectErrorStream(false);
+            conn.process = pb.start();
+            log.info("[MCP] Started stdio process: {}", conn.command);
+            return conn.process;
+        } catch (Exception e) {
+            log.error("[MCP] Failed to start stdio process: {}", conn.command, e);
+            return null;
+        }
+    }
+
+    /**
+     * 通过子进程 stdio 发送 JSON-RPC 请求并读取响应。
+     * 写入 stdin → 读取 stdout 的第一行作为 JSON 响应。
+     */
+    private String sendStdioRequest(Process process, String requestJson) {
+        try {
+            // 写入 stdin
+            BufferedWriter writer = new BufferedWriter(
+                    new OutputStreamWriter(process.getOutputStream(), java.nio.charset.StandardCharsets.UTF_8));
+            writer.write(requestJson);
+            writer.newLine();
+            writer.flush();
+
+            // 读取 stdout（读取所有行）
+            BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder response = new StringBuilder();
+            String line;
+            long deadline = System.currentTimeMillis() + 10000; // 10s 超时
+            while (System.currentTimeMillis() < deadline && (line = reader.readLine()) != null) {
+                response.append(line);
+            }
+
+            return response.length() > 0 ? response.toString() : null;
+
+        } catch (Exception e) {
+            log.warn("[MCP] Stdio communication error: {}", e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -202,22 +319,22 @@ public class McpClientManager {
     }
 
     private String callViaHttp(McpConnection conn, String toolName, Map<String, Object> args) throws Exception {
-        JSONObject request = new JSONObject(true);
+        JSONObject request = new JSONObject();
         request.put("jsonrpc", "2.0");
         request.put("method", "tools/call");
         request.put("id", UUID.randomUUID().toString());
 
-        JSONObject params = new JSONObject(true);
+        JSONObject params = new JSONObject();
         params.put("name", toolName);
         params.put("arguments", args);
         request.put("params", params);
 
         HttpRequest req = HttpRequest.newBuilder()
-            .uri(URI.create(conn.url))
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(request.toJSONString()))
-            .timeout(java.time.Duration.ofSeconds(30))
-            .build();
+                .uri(URI.create(conn.url))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(request.toJSONString()))
+                .timeout(java.time.Duration.ofSeconds(30))
+                .build();
 
         HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
         JSONObject json = JSON.parseObject(resp.body());
@@ -230,12 +347,6 @@ public class McpClientManager {
 
         JSONObject err = json.getJSONObject("error");
         return err != null ? "Error: " + err.toJSONString() : "Unknown MCP response";
-    }
-
-    private String callViaStdio(McpConnection conn, String toolName, Map<String, Object> args) throws Exception {
-        // 通过子进程 stdio 发送 JSON-RPC 请求
-        // TODO: 实现标准的 JSON-RPC over stdio 协议
-        return "Stdio tool execution not yet implemented";
     }
 
     // ==================== 内部类型 ====================

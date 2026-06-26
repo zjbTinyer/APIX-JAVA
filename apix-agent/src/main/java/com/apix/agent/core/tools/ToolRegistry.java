@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -30,53 +30,42 @@ public class ToolRegistry {
 
     /** 子 Agent 禁止使用的工具 */
     public static final Set<String> FORBIDDEN_FOR_SUB_AGENT = Set.of(
-        "request_user_input", "send_images", "assign_sub_assistant",
-        "query_sub_assistant", "stop_sub_assistant"
-    );
+            "request_user_input", "send_images", "assign_sub_assistant",
+            "query_sub_assistant", "stop_sub_assistant");
 
     /** 需要工作目录的工具 */
     public static final Set<String> NEED_WORKSPACE_TOOLS = Set.of(
-        "fetch_files", "read_workspace_file", "list_workspace_files",
-        "write_workspace_file", "move_workspace_file", "delete_workspace_file",
-        "run_workspace_command", "run_python_code", "load_skill",
-        "ocr_analysis", "send_images"
-    );
+            "fetch_files", "read_workspace_file", "list_workspace_files",
+            "write_workspace_file", "move_workspace_file", "delete_workspace_file",
+            "run_workspace_command", "run_python_code", "load_skill",
+            "ocr_analysis", "send_images");
 
     /** 冲突工具集（同一轮不能同时调用） */
     public static final Set<String> CONFLICT_TOOL_SET = Set.of(
-        "write_todos", "update_memory", "load_skill"
-    );
+            "write_todos", "update_memory", "load_skill");
 
     /** 权限 → 工具名称映射 */
     private static final Map<String, Set<String>> PERMISSION_TOOL_MAP = new LinkedHashMap<>();
 
     static {
         PERMISSION_TOOL_MAP.put("file_operation", Set.of(
-            "fetch_files", "read_workspace_file", "list_workspace_files",
-            "write_workspace_file", "move_workspace_file", "delete_workspace_file"
-        ));
+                "fetch_files", "read_workspace_file", "list_workspace_files",
+                "write_workspace_file", "move_workspace_file", "delete_workspace_file"));
         PERMISSION_TOOL_MAP.put("web_search", Set.of(
-            "search_web_by_keywords", "search_web_by_urls"
-        ));
+                "search_web_by_keywords", "search_web_by_urls"));
         PERMISSION_TOOL_MAP.put("knowledge_retrieval", Set.of(
-            "search_knowledge_base"
-        ));
+                "search_knowledge_base"));
         PERMISSION_TOOL_MAP.put("command_operation", Set.of(
-            "run_workspace_command", "run_python_code"
-        ));
+                "run_workspace_command", "run_python_code"));
         PERMISSION_TOOL_MAP.put("skill_load", Set.of(
-            "load_skill"
-        ));
+                "load_skill"));
         PERMISSION_TOOL_MAP.put("agent_assign", Set.of(
-            "assign_sub_assistant", "query_sub_assistant", "stop_sub_assistant"
-        ));
+                "assign_sub_assistant", "query_sub_assistant", "stop_sub_assistant"));
         PERMISSION_TOOL_MAP.put("task_flow", Set.of(
-            "update_test_task", "get_test_task"
-        ));
+                "update_test_task", "get_test_task"));
         PERMISSION_TOOL_MAP.put("default", Set.of(
-            "write_todos", "read_memory", "update_memory",
-            "ocr_analysis", "send_images", "request_user_input"
-        ));
+                "write_todos", "read_memory", "update_memory",
+                "ocr_analysis", "send_images", "request_user_input"));
     }
 
     @PostConstruct
@@ -114,8 +103,8 @@ public class ToolRegistry {
      * 根据权限获取可用工具列表（用于 LLM function calling）。
      */
     public List<Map<String, Object>> getToolsForPermissions(List<String> permissions,
-                                                             String agentRole,
-                                                             boolean workspaceConfigured) {
+            String agentRole,
+            boolean workspaceConfigured) {
         List<Map<String, Object>> result = new ArrayList<>();
 
         if (permissions.contains("forbidden")) {
@@ -144,7 +133,7 @@ public class ToolRegistry {
 
             // 子 Agent 限制
             if (("sub_agent".equals(agentRole) || "team_worker".equals(agentRole))
-                && FORBIDDEN_FOR_SUB_AGENT.contains(name)) {
+                    && FORBIDDEN_FOR_SUB_AGENT.contains(name)) {
                 continue;
             }
 

@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -27,9 +27,9 @@ public class MemoryClient {
     private static final Logger log = LoggerFactory.getLogger(MemoryClient.class);
 
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .build();
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build();
 
     @Value("${apix.services.memory:http://localhost:5093}")
     private String baseUrl;
@@ -40,7 +40,7 @@ public class MemoryClient {
      */
     public boolean appendMessage(String clientId, String historyId, Map<String, Object> message) {
         try {
-            JSONObject body = new JSONObject(true);
+            JSONObject body = new JSONObject();
             body.put("client_id", clientId);
             body.put("session_id", "");
             body.put("history_id", historyId);
@@ -80,7 +80,7 @@ public class MemoryClient {
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> getMessages(String historyId) {
         try {
-            JSONObject body = new JSONObject(true);
+            JSONObject body = new JSONObject();
             body.put("history_id", historyId);
 
             String respJson = post("/memory/memory/get_messages", body);
@@ -108,7 +108,7 @@ public class MemoryClient {
      */
     public boolean insertShorttermMemory(String clientId, String historyId, String memoryId, String content) {
         try {
-            JSONObject body = new JSONObject(true);
+            JSONObject body = new JSONObject();
             body.put("client_id", clientId);
             body.put("history_id", historyId);
             body.put("memory_id", memoryId);
@@ -128,7 +128,7 @@ public class MemoryClient {
      */
     public String getShorttermMemory(String clientId, String historyId) {
         try {
-            JSONObject body = new JSONObject(true);
+            JSONObject body = new JSONObject();
             body.put("client_id", clientId);
             body.put("history_id", historyId);
 
@@ -151,7 +151,7 @@ public class MemoryClient {
      */
     public String getLongtermMemory(String clientId) {
         try {
-            JSONObject body = new JSONObject(true);
+            JSONObject body = new JSONObject();
             body.put("client_id", clientId);
 
             String respJson = post("/memory/memory/get_longterm_memory", body);
@@ -174,7 +174,7 @@ public class MemoryClient {
     @SuppressWarnings("unchecked")
     public List<Map<String, Object>> getConversations(String userUid) {
         try {
-            JSONObject body = new JSONObject(true);
+            JSONObject body = new JSONObject();
             body.put("user_uid", userUid);
 
             String respJson = post("/memory/conversation/get_list", body);
@@ -199,7 +199,7 @@ public class MemoryClient {
      */
     public Map<String, Object> createConversation(String userUid, String title) {
         try {
-            JSONObject body = new JSONObject(true);
+            JSONObject body = new JSONObject();
             body.put("user_uid", userUid);
             body.put("title", title != null ? title : "新的聊天...");
 
@@ -225,11 +225,11 @@ public class MemoryClient {
     private String post(String path, JSONObject body) throws Exception {
         String url = baseUrl + path;
         Request request = new Request.Builder()
-            .url(url)
-            .addHeader("Content-Type", "application/json")
-            .post(RequestBody.create(MediaType.parse("application/json"),
-                body.toJSONString()))
-            .build();
+                .url(url)
+                .addHeader("Content-Type", "application/json")
+                .post(RequestBody.create(MediaType.parse("application/json"),
+                        body.toJSONString()))
+                .build();
 
         try (Response resp = httpClient.newCall(request).execute()) {
             if (!resp.isSuccessful()) {

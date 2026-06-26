@@ -7,10 +7,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 
 /**
@@ -27,14 +27,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private JwtConfig jwtConfig;
 
     private static final java.util.Set<String> PUBLIC_PATHS = java.util.Set.of(
-        "/user/login", "/user/register", "/health", "/api/v1/get_models_list",
-        "/auth/login", "/auth/register", "/auth/ensure_user", "/auth/"
-    );
+            "/user/login", "/user/register", "/health", "/api/v1/get_models_list",
+            "/auth/login", "/auth/register", "/auth/ensure_user", "/auth/");
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-                                     HttpServletResponse response,
-                                     FilterChain filterChain)
+            HttpServletResponse response,
+            FilterChain filterChain)
             throws ServletException, IOException {
 
         String path = request.getRequestURI();

@@ -79,9 +79,8 @@ public class AuthController {
 
             result.put("success", true);
             result.put("messages", Map.of(
-                "uid", user.getUserUid(),
-                "token", token
-            ));
+                    "uid", user.getUserUid(),
+                    "token", token));
 
         } catch (Exception e) {
             log.error("[Auth] Login error", e);
@@ -137,9 +136,8 @@ public class AuthController {
 
             result.put("success", true);
             result.put("messages", Map.of(
-                "uid", user.getUserUid(),
-                "token", token
-            ));
+                    "uid", user.getUserUid(),
+                    "token", token));
 
         } catch (Exception e) {
             log.error("[Auth] Register error", e);
@@ -187,12 +185,15 @@ public class AuthController {
     }
 
     // ==================== 密码工具 ====================
+    // 委托给 UserService 的 BCryptPasswordEncoder，统一认证逻辑
 
     private String hashPassword(String password) {
-        return Integer.toHexString((password + ":apix-salt").hashCode());
+        org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder encoder = new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();
+        return encoder.encode(password);
     }
 
     private boolean checkPassword(String rawPassword, String hashed) {
-        return hashPassword(rawPassword).equals(hashed);
+        org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder encoder = new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder();
+        return encoder.matches(rawPassword, hashed);
     }
 }

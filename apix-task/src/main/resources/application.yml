@@ -4,3 +4,15 @@ server:
 spring:
   application:
     name: apix-task
+
+---
+# 📋 apix-task — 任务流引擎
+#
+# 当前为基础骨架版本，已包含 REST API 端点：
+#   GET  /api/v1/health          — 健康检查
+#   GET  /api/v1/tasks           — 任务列表
+#   GET  /api/v1/tasks/stats     — 任务统计
+#   POST /api/v1/tasks/{id}/stop — 终止任务
+#   POST /api/v1/tasks/clear-finished — 清理已完成
+#
+# TODO: 对接后端任务引擎，实现任务流的定义、编排和执行。

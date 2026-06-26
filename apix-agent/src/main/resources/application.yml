@@ -12,6 +12,7 @@ spring:
       - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
       - org.redisson.spring.starter.RedissonAutoConfiguration
       - org.redisson.spring.starter.RedissonAutoConfigurationV2
+      - org.springframework.boot.autoconfigure.sql.init.SqlInitializationAutoConfiguration
 
 apix:
   agent:

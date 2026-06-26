@@ -8,6 +8,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -75,9 +77,8 @@ public class UserService {
 
         result.put("success", true);
         result.put("messages", Map.of(
-            "uid", user.getUserUid(),
-            "token", token
-        ));
+                "uid", user.getUserUid(),
+                "token", token));
         return result;
     }
 
@@ -101,14 +102,19 @@ public class UserService {
 
     // ==================== 密码处理 ====================
 
+    private static final BCryptPasswordEncoder PASSWORD_ENCODER = new BCryptPasswordEncoder();
+
     /**
-     * 简单的密码哈希（生产环境应使用 bcrypt）。
+     * 使用 bcrypt 哈希密码。
      */
     private String hashPassword(String password) {
-        return Integer.toHexString((password + ":apix-salt").hashCode());
+        return PASSWORD_ENCODER.encode(password);
     }
 
+    /**
+     * 验证密码。
+     */
     private boolean checkPassword(String rawPassword, String hashed) {
-        return hashPassword(rawPassword).equals(hashed);
+        return PASSWORD_ENCODER.matches(rawPassword, hashed);
     }
 }

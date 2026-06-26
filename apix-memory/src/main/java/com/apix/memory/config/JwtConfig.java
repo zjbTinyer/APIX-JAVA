@@ -1,6 +1,8 @@
 package com.apix.memory.config;
 
-import io.jsonwebtoken.*;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -36,24 +38,24 @@ public class JwtConfig {
         Date expiry = new Date(now.getTime() + expireHours * 3600_000);
 
         return Jwts.builder()
-            .setId(UUID.randomUUID().toString())
-            .setSubject(userUid)
-            .claim("username", username)
-            .setIssuedAt(now)
-            .setExpiration(expiry)
-            .signWith(getKey(), SignatureAlgorithm.HS256)
-            .compact();
+                .id(UUID.randomUUID().toString())
+                .subject(userUid)
+                .claim("username", username)
+                .issuedAt(now)
+                .expiration(expiry)
+                .signWith(getKey())
+                .compact();
     }
 
     /**
      * 解析 JWT token。
      */
     public Claims parseToken(String token) {
-        return Jwts.parserBuilder()
-            .setSigningKey(getKey())
-            .build()
-            .parseClaimsJws(token)
-            .getBody();
+        return Jwts.parser()
+                .verifyWith(getKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
     /**

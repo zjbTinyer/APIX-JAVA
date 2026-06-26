@@ -2,16 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ======== 设计 Token 系统 ======== */
 :root {
+    /* 主色 */
     --apix-primary: #6366f1;
     --apix-primary-hover: #4f46e5;
+    --apix-primary-light: #e0e7ff;
+    --apix-primary-dark: #4338ca;
+
+    /* 背景色 */
     --apix-bg: #f5f5f5;
+    --apix-bg-card: #ffffff;
     --apix-sidebar: #1e1e2e;
+    --apix-sidebar-hover: #2a2a3e;
+
+    /* 文字 */
     --apix-text: #1e1e2e;
     --apix-text-secondary: #6b7280;
+    --apix-text-tertiary: #9ca3af;
+
+    /* 边框 */
     --apix-border: #e5e7eb;
+    --apix-border-light: #f3f4f6;
+
+    /* 消息气泡 */
     --apix-msg-human: #6366f1;
     --apix-msg-ai: #ffffff;
+
+    /* 阴影 */
+    --apix-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --apix-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    --apix-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+
+    /* 圆角 */
+    --apix-radius-sm: 6px;
+    --apix-radius-md: 8px;
+    --apix-radius-lg: 12px;
+    --apix-radius-xl: 16px;
+
+    /* 动画 */
+    --apix-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --apix-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --apix-duration-fast: 150ms;
+    --apix-duration-normal: 200ms;
+    --apix-duration-slow: 300ms;
+}
+
+/* 深色主题 */
+.dark {
+    --apix-primary: #818cf8;
+    --apix-primary-hover: #6366f1;
+    --apix-primary-light: #312e81;
+    --apix-primary-dark: #a5b4fc;
+
+    --apix-bg: #0f0f1a;
+    --apix-bg-card: #1a1a2e;
+    --apix-sidebar: #12121e;
+    --apix-sidebar-hover: #1e1e34;
+
+    --apix-text: #e2e8f0;
+    --apix-text-secondary: #94a3b8;
+    --apix-text-tertiary: #64748b;
+
+    --apix-border: #2d2d44;
+    --apix-border-light: #1e1e32;
+
+    --apix-msg-human: #818cf8;
+    --apix-msg-ai: #1a1a2e;
+
+    --apix-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --apix-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+    --apix-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
 }
 
 * {
@@ -25,11 +86,15 @@ body {
     background-color: var(--apix-bg);
     color: var(--apix-text);
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color var(--apix-duration-slow) var(--apix-ease-in-out),
+        color var(--apix-duration-slow) var(--apix-ease-in-out);
 }
 
-/* Scrollbar */
+/* ======== 滚动条样式 ======== */
 ::-webkit-scrollbar {
     width: 6px;
+    height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -39,13 +104,148 @@ body {
 ::-webkit-scrollbar-thumb {
     background: #d1d5db;
     border-radius: 3px;
+    transition: background var(--apix-duration-fast);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    background: #4b5563;
 }
 
 ::-webkit-scrollbar-thumb:hover {
     background: #9ca3af;
 }
 
-/* Markdown content styles */
+.dark ::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+}
+
+/* ======== 动画关键帧 ======== */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+@keyframes pulse-dot {
+
+    0%,
+    80%,
+    100% {
+        transform: scale(0);
+        opacity: 0.5;
+    }
+
+    40% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes spin-slow {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ======== 工具类 ======== */
+.animate-fade-in {
+    animation: fadeIn var(--apix-duration-normal) var(--apix-ease-out);
+}
+
+.animate-slide-up {
+    animation: slideUp var(--apix-duration-slow) var(--apix-ease-out);
+}
+
+.animate-slide-down {
+    animation: slideDown var(--apix-duration-normal) var(--apix-ease-out);
+}
+
+.animate-scale-in {
+    animation: scaleIn var(--apix-duration-normal) var(--apix-ease-out);
+}
+
+.animate-shimmer {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+/* ======== Skeleton 加载骨架 ======== */
+.skeleton {
+    background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: var(--apix-radius-sm);
+}
+
+.dark .skeleton {
+    background: linear-gradient(90deg, #1e1e32 25%, #2a2a44 50%, #1e1e32 75%);
+    background-size: 200% 100%;
+}
+
+/* ======== 过渡工具 ======== */
+.transition-theme {
+    transition: background-color var(--apix-duration-slow) var(--apix-ease-in-out),
+        border-color var(--apix-duration-slow) var(--apix-ease-in-out),
+        color var(--apix-duration-slow) var(--apix-ease-in-out),
+        box-shadow var(--apix-duration-slow) var(--apix-ease-in-out);
+}
+
+/* ======== Markdown 内容样式 ======== */
 .markdown-body h1 {
     font-size: 1.5rem;
     font-weight: 700;
@@ -82,6 +282,11 @@ body {
     font-size: 0.875rem;
 }
 
+.dark .markdown-body code {
+    background: #2d2d44;
+    color: #e2e8f0;
+}
+
 .markdown-body pre {
     background: #1e1e2e;
     color: #e5e7eb;
@@ -101,7 +306,7 @@ body {
     border-left: 3px solid var(--apix-primary);
     padding-left: 1rem;
     margin: 0.5rem 0;
-    color: #6b7280;
+    color: var(--apix-text-secondary);
 }
 
 .markdown-body table {
@@ -112,12 +317,48 @@ body {
 
 .markdown-body th,
 .markdown-body td {
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--apix-border);
     padding: 0.5rem;
     text-align: left;
 }
 
 .markdown-body th {
-    background: #f9fafb;
+    background: var(--apix-bg);
     font-weight: 600;
+}
+
+/* ======== 组件相关 ======== */
+
+/* Typing dots */
+.typing-dots span {
+    width: 6px;
+    height: 6px;
+    margin: 0 2px;
+    background: var(--apix-primary);
+    border-radius: 50%;
+    display: inline-block;
+    animation: pulse-dot 1.4s infinite ease-in-out both;
+}
+
+.typing-dots span:nth-child(1) {
+    animation-delay: -0.32s;
+}
+
+.typing-dots span:nth-child(2) {
+    animation-delay: -0.16s;
+}
+
+.typing-dots span:nth-child(3) {
+    animation-delay: 0s;
+}
+
+/* Glass 效果 */
+.glass {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.dark .glass {
+    background: rgba(26, 26, 46, 0.7);
 }

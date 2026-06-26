@@ -21,3 +21,7 @@ logs/
 
 # Data
 data/
+
+# Frontend build output
+apix-web/dist/
+node_modules/

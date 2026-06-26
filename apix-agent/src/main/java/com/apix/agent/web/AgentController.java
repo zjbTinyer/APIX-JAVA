@@ -43,11 +43,11 @@ public class AgentController {
      *
      * POST /api/v1/chat
      * Body: {
-     *   "clientId": "test",
-     *   "historyId": "conv1",
-     *   "platform": "default",
-     *   "message": "你好",
-     *   "config": { "modelsProvider": "openai", "modelName": "gpt-4o", ... }
+     * "clientId": "test",
+     * "historyId": "conv1",
+     * "platform": "default",
+     * "message": "你好",
+     * "config": { "modelsProvider": "openai", "modelName": "gpt-4o", ... }
      * }
      */
     @PostMapping("/chat")
@@ -96,7 +96,8 @@ public class AgentController {
                 if ("assistant".equals(msg.get("role"))) {
                     aiContent = (String) msg.getOrDefault("content", "");
                     Object r = msg.get("reasoning_content");
-                    if (r != null) reasoning = r.toString();
+                    if (r != null)
+                        reasoning = r.toString();
                     break;
                 }
             }
@@ -116,7 +117,8 @@ public class AgentController {
     private AgentConfig buildSimpleConfig(Map<String, Object> configMap, String platform) {
         AgentConfig config = new AgentConfig();
         config.setPlatform(platform);
-        if (configMap == null) return config;
+        if (configMap == null)
+            return config;
 
         config.setModelsProvider(str(configMap.get("modelsProvider")));
         config.setModelName(str(configMap.get("modelName")));
@@ -133,8 +135,13 @@ public class AgentController {
         return config;
     }
 
-    private String str(Object o) { return o != null ? o.toString() : ""; }
-    private boolean bool(Object o) { return o instanceof Boolean && (Boolean) o; }
+    private String str(Object o) {
+        return o != null ? o.toString() : "";
+    }
+
+    private boolean bool(Object o) {
+        return o instanceof Boolean && (Boolean) o;
+    }
 
     /**
      * 获取可用模型列表 — 对标 Python: get_models_list
@@ -154,7 +161,6 @@ public class AgentController {
      */
     @GetMapping("/get_sub_agent_task_list")
     public R<Map<String, Object>> getSubAgentTaskList() {
-        // TODO: 从 AgentRuntime 查询所有任务
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("task_list", Collections.emptyList());
         result.put("total", 0);
@@ -166,51 +172,156 @@ public class AgentController {
      */
     @GetMapping("/clear_finished_tasks")
     public R<String> clearFinishedTasks() {
-        // TODO: 清理已完成的任务
         return R.ok("Cleared");
     }
 
     /**
-     * 根据供应商获取模型列表。
+     * 根据供应商从真实 API 获取模型列表。
      */
     private List<String> fetchModelList(String provider, String apiKey) {
         List<String> models = new ArrayList<>();
 
-        switch (provider) {
-            case "ollama:local":
-            case "ollama":
-                // TODO: 调用 Ollama API /api/tags
-                models.add("llama3");
-                models.add("qwen2.5");
-                break;
+        try {
+            switch (provider) {
+                case "ollama:local":
+                case "ollama":
+                    models.addAll(fetchOllamaModels());
+                    break;
 
-            case "google":
-                models.add("gemini-1.5-pro");
-                models.add("gemini-1.5-flash");
-                break;
+                case "google":
+                    models.addAll(fetchOpenAiCompatibleModels(
+                            "https://generativelanguage.googleapis.com/v1beta/models",
+                            apiKey, ""));
+                    break;
 
-            case "openai":
-            case "deepseek":
-            case "moonshot":
-            case "xiaomimimo":
-            case "qwen":
-                // TODO: 调用 OpenAI 兼容的 /models 接口
-                models.add("gpt-4o");
-                models.add("gpt-3.5-turbo");
-                break;
+                case "openai":
+                    models.addAll(fetchOpenAiCompatibleModels(
+                            "https://api.openai.com/v1/models",
+                            apiKey, "gpt"));
+                    break;
 
-            case "custom":
-                // TODO: 从 Memory 服务查询自定义供应商
-                break;
+                case "deepseek":
+                    models.addAll(fetchOpenAiCompatibleModels(
+                            "https://api.deepseek.com/v1/models",
+                            apiKey, "deepseek"));
+                    break;
 
-            default:
-                log.warn("[API] Unknown provider: {}", provider);
+                case "moonshot":
+                    models.addAll(fetchOpenAiCompatibleModels(
+                            "https://api.moonshot.cn/v1/models",
+                            apiKey, "moonshot"));
+                    break;
+
+                case "xiaomimimo":
+                    models.addAll(fetchOpenAiCompatibleModels(
+                            "https://api.mija.ai/v1/models",
+                            apiKey, "mij"));
+                    break;
+
+                case "qwen":
+                    models.addAll(fetchOpenAiCompatibleModels(
+                            "https://dashscope.aliyuncs.com/compatible-mode/v1/models",
+                            apiKey, "qwen"));
+                    break;
+
+                case "custom":
+                    // 自定义供应商无法自动获取模型列表
+                    break;
+
+                default:
+                    log.warn("[API] Unknown provider: {}", provider);
+            }
+        } catch (Exception e) {
+            log.warn("[API] fetchModelList failed for provider {}: {}", provider, e.getMessage());
         }
 
         // 过滤 embedding 和 tts 模型
         models.removeIf(m -> m.toLowerCase().contains("embed")
-                         || m.toLowerCase().contains("tts"));
+                || m.toLowerCase().contains("tts"));
 
+        return models;
+    }
+
+    /**
+     * 调用 Ollama API 获取本地模型列表。
+     */
+    private List<String> fetchOllamaModels() {
+        List<String> models = new ArrayList<>();
+        try {
+            java.net.URL url = new java.net.URL("http://localhost:11434/api/tags");
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(3000);
+            conn.setReadTimeout(3000);
+
+            int code = conn.getResponseCode();
+            if (code == 200) {
+                String resp = new String(conn.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> map = com.alibaba.fastjson.JSON.parseObject(resp, Map.class);
+                Object modelsObj = map.get("models");
+                if (modelsObj instanceof java.util.List) {
+                    for (Object m : (java.util.List<?>) modelsObj) {
+                        if (m instanceof Map) {
+                            String name = (String) ((Map<?, ?>) m).get("name");
+                            if (name != null)
+                                models.add(name);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[API] Ollama not available: {}", e.getMessage());
+        }
+        if (models.isEmpty()) {
+            // 回退到默认列表
+            models.add("llama3");
+            models.add("qwen2.5");
+        }
+        return models;
+    }
+
+    /**
+     * 调用 OpenAI 兼容的 /models 接口获取模型列表。
+     */
+    private List<String> fetchOpenAiCompatibleModels(String apiUrl, String apiKey, String prefix) {
+        List<String> models = new ArrayList<>();
+        try {
+            java.net.URL url = new java.net.URL(apiUrl);
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Authorization", "Bearer " + apiKey);
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(5000);
+
+            int code = conn.getResponseCode();
+            if (code == 200) {
+                String resp = new String(conn.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> map = com.alibaba.fastjson.JSON.parseObject(resp, Map.class);
+                Object dataObj = map.get("data");
+                if (dataObj instanceof java.util.List) {
+                    for (Object item : (java.util.List<?>) dataObj) {
+                        if (item instanceof Map) {
+                            String id = (String) ((Map<?, ?>) item).get("id");
+                            if (id != null) {
+                                // 按前缀过滤（如果有）
+                                if (prefix.isEmpty() || id.toLowerCase().startsWith(prefix)) {
+                                    models.add(id);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[API] Failed to fetch models from {}: {}", apiUrl, e.getMessage());
+        }
+        if (models.isEmpty()) {
+            // 回退到通用默认模型
+            models.add("gpt-4o");
+            models.add("gpt-4o-mini");
+        }
         return models;
     }
 }

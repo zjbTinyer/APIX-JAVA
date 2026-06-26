@@ -66,7 +66,7 @@ export default function SettingPage() {
                 <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-2">
                     <h3 className="font-medium text-gray-900 mb-3 border-b border-gray-100 pb-2">界面设置</h3>
                     <Switch label="在AI消息中显示工具调用标签" desc="开启后实时显示AI当前正在调用的工具名称" checked={config.showToolLabels} onChange={(v) => setConfig({ showToolLabels: v })} />
-                    <Switch label="启用深色主题" desc="Beta - 开启后深色主题可能适配不佳" checked={config.darkTheme} onChange={(v) => setConfig({ darkTheme: v })} />
+                    <Switch label="启用深色主题" desc="开启后全局切换为深色显示模式" checked={config.darkTheme} onChange={(v) => setConfig({ darkTheme: v })} />
                 </section>
 
                 {/* LLM 配置 */}
